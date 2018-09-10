@@ -1,0 +1,5 @@
+Listening on: 1024
+Mon Sep 10 15:05:01 EDT 2018|Connection|/127.0.0.1
+Mon Sep 10 15:05:14 EDT 2018|Disconnected|/127.0.0.1
+Mon Sep 10 15:05:32 EDT 2018|Connection|/127.0.0.1
+Mon Sep 10 15:06:03 EDT 2018|Disconnected|/127.0.0.1
