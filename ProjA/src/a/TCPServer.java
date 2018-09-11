@@ -7,6 +7,7 @@ import java.io.*;
 public class TCPServer{
 	
 	private Set<InetAddress> firewall = new HashSet<InetAddress>();
+	
 	public TCPServer(int port, PrintStream log, File file) throws Exception
 	{
 		//this.firewall = firewall;
@@ -24,8 +25,8 @@ public class TCPServer{
 			
 			if(firewall.contains(client.getInetAddress())) 
 			{
-				System.out.println("Firewall check");
-				(new Worker(client)).handle();
+				System.out.println("Firewall check"); //Fire wall cleared
+				(new Worker(client, this)).handle(); //Passing Client to worker 
 			}
 			log.println((new Date()).toString()+"|"+"Disconnected"+"|"+client.getInetAddress());
 		}
@@ -33,6 +34,20 @@ public class TCPServer{
 		log.println((new Date()).toString()+"|"+"Server shut down|");
 	}
 	
+	public void push(String in) throws UnknownHostException
+	{
+		InetAddress ip = InetAddress.getByName(in);
+		firewall.add(ip);
+	}
+	public void pull(String in) throws UnknownHostException
+	{
+		InetAddress ip = InetAddress.getByName(in);
+		firewall.remove(ip);
+	}
+		
+	public String runSet() {
+		return firewall.toString();
+	}
 	public static void main(String args[]) throws Exception {
 		
 		int port = 1024;
