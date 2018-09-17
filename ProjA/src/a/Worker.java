@@ -1,14 +1,31 @@
 package a;
 
 import java.io.*;
+import java.math.*;
 import java.net.*;
 import java.util.*;
+import projA.*;
+import javax.xml.*;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
 
-public class Worker {
+import com.google.gson.*;
+
+public class Worker implements Runnable {
 	Socket client;
-	TCPServer server;
+	static TCPServer server;
 	PrintWriter out;
 	BufferedReader in;
+	public final String bye = "(?i)bye";
+	public final String time = "(?i)gettime";
+	public final String punchIp = "(?i)punch\\s(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
+	public final String plugIp = "(?i)plug\\s(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
+	public final String primeDig = "(?i)prime\\s\\d+";
+	public final String authorize = "((?i)auth)\\s(\\w+\\s\\w+)";
+	public final String rosterReg = "(?i)roster\\s\\w+\\s(XML|JSON)";
+	
+	
 	private static final HashMap<String, String> accounts = new HashMap<String, String>() {
 		{
 			put("Daniel", "password");
@@ -23,32 +40,33 @@ public class Worker {
 	}
 
 	public Worker handle() throws Exception {
-		// System.out.println("worker connected"); //worker connection worked;
+		server.logIt((new Date()).toString()+"|"+"Connection"+"|"+client.getInetAddress()); //Client connection
 
 		out = new PrintWriter(this.client.getOutputStream(), true); // output stream back to client
 		in = new BufferedReader(new InputStreamReader(this.client.getInputStream())); // input stream from client
 		String read; // store input for computations
 
-		while (!(read = in.readLine()).equals("Bye")) // Keep looking for commands until Bye is typed in,
+		while (!(read = in.readLine()).matches(bye)) // Keep looking for commands until Bye is typed in,
 		{
-			if (read.equals("getTime")) // M1 get the time
+			if (read.matches(time)) // M1 get the time
 			{
 				out.println(Worker.time());
 			} 
-			else if (read.matches("Punch\\s<[0-2]?[0-5]?[0-5].[0-2]?[0-5]?[0-5].[0-2]?[0-5]?[0-5].[0-2]?[0-5]?[0-5]>")) // M3 Punch<IP>
+			else if (read.matches(punchIp)) // M3 Punch<IP>
 			{
 				punch(read);
-				out.println(server.runSet());
-				out.println("you've been punched");
-				
+				//out.println(server.runSet());
 			}
-			else if(read.matches("Plug\\s<[0-2]?[0-5]?[0-5].[0-2]?[0-5]?[0-5].[0-2]?[0-5]?[0-5].[0-2]?[0-5]?[0-5]>"))
+			else if (read.matches(plugIp)) //M4 Plug<ip>
 			{
-				push(read);
-				out.println(server.runSet());
-				out.println("you've been pluged");
+				plug(read);
+				//out.println(server.runSet());
 			}
-			else if (read.matches("Auth\\s<\\w+>\\s<\\w+>")) // M6 Authorization
+			else if (read.matches(primeDig)) //M5 return prime of length digit
+			{
+				out.println(prime(read));
+			}
+			else if (read.matches(authorize)) // M6 Authorization
 			{
 				if (Worker.auth(read)) {
 					out.println("You are in!");
@@ -56,7 +74,13 @@ public class Worker {
 					out.println("Auth Failure");
 				}
 			}
-			else {
+			else if (read.matches(rosterReg)) 
+			{
+				roster(read);
+				//out.println("error");
+			}
+			else 
+			{
 				out.println("Don't understand <" + read +">"); //Error message
 			}
 
@@ -77,32 +101,53 @@ public class Worker {
 
 	private void bye() throws IOException // M2
 	{
+		server.logIt((new Date()).toString() + "|" + "Disconnected" + "|" + client.getInetAddress()); // Client disconnection
 		client.close();
 	}
-	
-	private void punch(String ip) throws UnknownHostException {
-		String empty = ""; //empty string
-		String[] split = (ip.split("\\s+")); //split string on black space
-		String address = split[1].replaceAll("[^A-Z,a-z,0-9,.]", empty); //replace "<>" with ""
-		System.out.println(address);
-		server.push(address);
-	}
-	private void push(String ip) throws UnknownHostException {
-		String empty = ""; //empty string
-		String[] split = (ip.split("\\s+")); //split string on black space
-		String address = split[1].replaceAll("[^A-Z,a-z,0-9,.]", empty); //replace "<>" with ""
-		System.out.println(address);
-		server.pull(address);
-	}
-	
-	private static boolean auth(String user) // M6
+
+	private void punch(String ip) throws UnknownHostException // M3 add to IP to firewall
 	{
-		String empty = ""; //empty string
-		boolean result; //empty result
-		String[] split = (user.split("\\s+")); //split string on black space
-		String acc = split[1].replaceAll("[^A-Z,a-z,0-9]", empty); //replace "<" with ""
-		String pass = split[2].replaceAll("[^A-Z,a-z,0-9]", empty); // replace ">" with ""
-		//System.out.println("User: " + acc + " Pass: " + pass); // debugging
+		// String empty = ""; //empty string
+		String[] split = (ip.split("\\s+")); // split string on black space
+		String address = split[1];
+		System.out.println(address);
+		server.punchOrPlug(address);
+	}
+
+	private void plug(String ip) throws UnknownHostException // M4 remove IP from firewall
+	{
+		// String empty = ""; //empty string
+		String[] split = (ip.split("\\s+")); // split string on black space
+		String address = split[1];
+		System.out.println(address);
+		server.punchOrPlug(address);
+	}
+
+	private static BigInteger prime(String digits) // M5 return prime number length of digits
+	{
+			BigInteger result = null;
+			String[] split = digits.split("\\s+");
+			int digLen = Integer.parseInt(split[1]);
+			digLen *= 3.33;
+			if (!(digLen < 2)) {
+				Random rnd = new Random();
+				result = BigInteger.probablePrime(digLen, rnd);
+			}else {
+				result = BigInteger.ZERO;
+			}
+
+
+		return result;
+	}
+
+	private static boolean auth(String user) // M6 see if user and pass match
+	{
+		// String empty = ""; //empty string
+		boolean result; // empty result
+		String[] split = (user.split("\\s+")); // split string on black space
+		String acc = split[1];
+		String pass = split[2];
+		// System.out.println("User: " + acc + " Pass: " + pass); // debugging
 		if (accounts.get(acc).equals(pass)) // if the account key has the value password
 		{
 			result = true; // return true
@@ -110,6 +155,40 @@ public class Worker {
 			result = false; // return false
 		}
 		return result; // return result
+	}
+
+	private void roster(String input) throws JAXBException // M7 return roster of students in course in either json||xml
+	{
+		String[] split = input.split("\\s+");
+		String number = split[1];
+		String format = split[2];
+		Course course = Util.getCourse(number);
+		
+		
+		if(format.matches("xml")) 
+		{
+			JAXBContext context = JAXBContext.newInstance(projA.Course.class);
+			Marshaller m = context.createMarshaller();
+			m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+			m.marshal(course, out);	
+		}else if(format.matches("json")) {
+			Gson gson = new GsonBuilder().setPrettyPrinting().create();
+			String json = gson.toJson(course);
+			out.println(json);
+		}
+	}
+
+	@Override
+	public void run() {
+		try {
+			this.handle();
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			String exception = String.format("%s | Exception: %s | ", time(), e.toString());
+			e.printStackTrace();
+			server.logIt(exception);
+		}
+
 	}
 
 }
